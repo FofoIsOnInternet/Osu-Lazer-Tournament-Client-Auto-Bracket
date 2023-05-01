@@ -52,3 +52,6 @@ def L4 (n_matches):
 
 def L5 (n_matches):
     return L4 (n_matches)
+
+def L6 (n_matches):
+    return L4(n_matches)

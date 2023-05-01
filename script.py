@@ -1,6 +1,12 @@
+"""
+2023-05-01
+Welcome!
+
+autor: FofoIsOnInternet (GitHub) - f o f o#1659 (discord)
+"""
 import json
 import os
-from winner_to_loser_algo import L1,L2,L3,L4,L5
+from winner_to_loser_algo import L1,L2,L3,L4,L5,L6
 
 # GETTERS & SETTERS
 
@@ -14,14 +20,14 @@ def get_json_dict (file:str)->dict:
 
 
 def save_bracket (file:str,bracket:dict):
-    """Saves the new generated json structure"""
+    """Saves the new generated json bracket"""
     with open(file, mode="w",encoding="utf-8") as f :
         json.dump(bracket,f,indent="\t")
         f.close()
 
 
 def get_round_names(bracket:dict)->list:
-    """Returns a list with all the round names of the given bracket"""
+    """Returns a list containing all the round names of the given bracket"""
     rounds = []
     for r in bracket["Rounds"] :
         rounds.append(get_simplified_round_name(r["Name"]))
@@ -29,14 +35,14 @@ def get_round_names(bracket:dict)->list:
 
 
 def get_round_details (bracket:dict,round_name:str)->dict:
-    """Takes a bracket and a round name (ex: roundof16 or grandfinals) and returns it's details"""
+    """Takes a bracket and a round (ex: roundof16 or grandfinals) and returns its details"""
     for r in bracket["Rounds"]:
         if get_simplified_round_name(r["Name"]) == round_name :
             return r
 
 
 def get_amount_matches (round_name:str,first_round=False,first_loser_week=False,separate_loser_round=False)->int:
-    """Returns the amount of matches that will be played during the specified rounds"""
+    """Returns the amount of matches that are going to be played during the specified round"""
     amount_matches_winner = {"roundof128":64,"roundof64":32,"roundof32":16,"roundof16":8,"quarterfinals":4,"semifinals":2,"finals":1,"grandfinals":2}
     winner_bracket = amount_matches_winner[round_name]
     if first_round : # first round    
@@ -63,16 +69,20 @@ def get_round_lengths (rounds:list):
         ex: {'round_name':{'Winner':n,'LoserR1':n,'LoserR2':n}, etc...}"""
     round_lengths = {}
     round_lengths[rounds[0]] = get_amount_matches(rounds[0],first_round=True,separate_loser_round=True)
-    round_lengths[rounds[1]] = get_amount_matches(rounds[1],first_loser_week=True,separate_loser_round=True)
+    if len(rounds) > 1 :
+        round_lengths[rounds[1]] = get_amount_matches(rounds[1],first_loser_week=True,separate_loser_round=True)
     for k in range(2,len(rounds)) :
         round_name = rounds[k]
         round_lengths[round_name] = get_amount_matches(round_name,separate_loser_round=True)
     return round_lengths
 
 def get_simplified_round_name (round_name:str)->str:
+    """Lower the text, removes spaces and dashes"""
     return round_name.lower().replace(" ","").replace("-","")
 
 def get_next_round(round_name:str)->str:
+    """Takes a round_name
+    Returns the next round that is going to be played"""
     rounds = ["roundof128","roundof64","roundof32","roundof16","quarterfinals","semifinals","finals","grandfinals"]
     round_progression = {}
     for k in range(len(rounds)-1):
@@ -80,6 +90,7 @@ def get_next_round(round_name:str)->str:
     return round_progression[round_name]
 
 def set_round_matches (bracket:dict,round_name:str,match_ids:list):
+    """Updates the part of the json file in 'Rounds' that specifies which matches are part of the given round"""
     for r in range(len( bracket["Rounds"])) :
         round_ = bracket["Rounds"][r]
         if get_simplified_round_name(round_["Name"]) == round_name :
@@ -87,17 +98,26 @@ def set_round_matches (bracket:dict,round_name:str,match_ids:list):
     return bracket
 
 
+# MANAGE ROUNDS
+
+
 def sort_rounds (rounds:list)->list:
     """In the rounds are not ordered properly."""
     rounds_sorted = ['roundof128',"roundof64","roundof32","roundof16","quarterfinals","semifinals","finals","grandfinals"]
     rounds_sorted.reverse()
-    first_round_index = len(rounds)
-    rounds = rounds_sorted[:first_round_index]
-    rounds.reverse()
-    return rounds             
-    
+    first_round_index = -1
+    for round_name in rounds :
+        if round_name in rounds_sorted :
+            round_index = rounds_sorted.index(round_name)
+            if round_index > first_round_index :
+                first_round_index = round_index
+    if first_round_index != -1 :
+        rounds = rounds_sorted[:first_round_index+1]
+        rounds.reverse()
+    else :
+        rounds = []
+    return rounds  
 
-# MANAGE ROUNDS
 
 def fix_bracket_missing_rounds (bracket:dict,rounds:list):
     """Since 'sort_rounds' is able to add new rounds that are not present in the initial json file
@@ -114,10 +134,11 @@ def fix_bracket_missing_rounds (bracket:dict,rounds:list):
 # CREATE MATCHES
 
 
-def create_bracket_matches (bracket:dict,rounds:str)->dict:
+def create_matches (bracket:dict,rounds:str)->dict:
     bracket["Matches"] = []
     bracket = create_round_matches(bracket , rounds[0] , first_round=True) # First round
-    bracket = create_round_matches(bracket , rounds[1] , matches_already_created=len(bracket["Matches"]) , first_loser_week=True) # Second round & first losers round
+    if len(rounds) > 1 :
+        bracket = create_round_matches(bracket , rounds[1] , matches_already_created=len(bracket["Matches"]) , first_loser_week=True) # Second round & first losers round
     for k in range(2,len(rounds)) :
         bracket = create_round_matches(bracket , rounds[k] , matches_already_created=len(bracket["Matches"]))
     return bracket 
@@ -127,7 +148,6 @@ def create_round_matches (bracket:dict,round_name:str,matches_already_created=0,
     """"""
     amount_matches = get_amount_matches(round_name,first_round=first_round,first_loser_week=first_loser_week)
     start_id = matches_already_created
-    print(round_name)
     round_info = get_round_details(bracket, round_name)
     matches = []
     for k in range(start_id , start_id + amount_matches["Winner"]): # Winner matches 
@@ -147,7 +167,6 @@ def create_round_matches (bracket:dict,round_name:str,matches_already_created=0,
 def place_matches (bracket:dict,rounds:list)->list:
     matches = bracket["Matches"]
     round_lengths = get_round_lengths(rounds)
-    print(round_lengths)
     matches = place_matches_winner(matches,rounds,round_lengths) # Winner matches
     matches = place_matches_loser(matches,rounds,round_lengths)# Loser
     bracket["Matches"] = matches
@@ -321,23 +340,27 @@ def in_power_of_two (x):
 
 
 def MAIN ():
-    print("Welcome!\nFor this script to work you'll need a 'bracket.json' file containing every round you want (up to Ro128).\nThese has to be named with their complete name\n(ex: Quarterfianls, Grand Finals or Round of 16),spaces & capital letters don't matter.")
-    bracket_file = input("Your bracket.json file directory: ").replace("/", "\\")
+    print("Welcome!\nFor this script to work you'll need the 'bracket.json' file of your tournament containing every round you want (up to Ro128).\nThese have to be named with their complete name\n(ex: Quarterfinals, Grand Finals or Round of 16),spaces & capital letters doesn't matter.")
+    bracket_file = input("Your bracket.json file directory:").replace("/", "\\")
     if os.path.exists(bracket_file) and bracket_file[-5:] == ".json" :
         # set up & get up
         bracket = get_json_dict(bracket_file)
         rounds = get_round_names(bracket)
-        print(rounds)
+        print('Imported Rounds:',rounds)
         rounds = sort_rounds(rounds)
-        print(rounds)
+        print('Rounds:',rounds)
+        while rounds == []:
+            rounds.append(get_simplified_round_name(input("It looks like your 'bracket.json' file doesn't contain any valid round. Let's fix that!\nAt which round do you want your bracket to start:")))
+            rounds = sort_rounds(rounds)
+            print('Rounds:',rounds)
         bracket = fix_bracket_missing_rounds (bracket,rounds)
         # manipulations
-        bracket = create_bracket_matches(bracket,rounds)
+        bracket = create_matches(bracket,rounds)
         bracket = place_matches(bracket,rounds)
         bracket = link_matches(bracket,rounds)
         # save
         save_bracket(bracket_file,bracket)
-        print("[Success]\n Thanks for using me!")
+        print("[Success]\nThank you for using me!\nI would really apreciate any kind of feedback! It is my first time releasing something.")
     else :
-        print("error :)")
+        print("An error has occurred\nMake sure that:\n   - The path is correct.\n   - The file exists.\n   - It is an absolute path.\n   - It only uses '/' or '\\\\'.")
 MAIN()
